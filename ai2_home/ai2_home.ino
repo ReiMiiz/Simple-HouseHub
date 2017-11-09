@@ -23,20 +23,17 @@
  * SOFTWARE.
  *
  */
-
- // Include the correct display library
- // For a connection via I2C using Wire include
- #include <Wire.h>  // Only needed for Arduino 1.6.5 and earlier
- #include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
- // or #include "SH1106.h" alis for `#include "SH1106Wire.h"`
- // For a connection via I2C using brzo_i2c (must be installed) include
- // #include <brzo_i2c.h> // Only needed for Arduino 1.6.5 and earlier
- // #include "SSD1306Brzo.h"
- // #include "SH1106Brzo.h"
- // For a connection via SPI include
- // #include <SPI.h> // Only needed for Arduino 1.6.5 and earlier
- // #include "SSD1306Spi.h"
- // #include "SH1106SPi.h"
+//Sorapon Pondsomchai,, Faculty of Computer Engineering @Chulalongkorn University
+// Include the correct display library
+// For a connection via I2C using Wire include
+#include <Wire.h>  // Only needed for Arduino 1.6.5 and earlier
+#include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
+#include <TimeLib.h>
+#include <ESP8266WiFi.h>
+#include <TaskScheduler.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
+#include <WiFiClient.h>
 
 // Include the UI lib
 #include "OLEDDisplayUi.h"
@@ -44,146 +41,269 @@
 // Include custom images
 #include "images.h"
 
-// Use the corresponding display class:
+#define debounce 50
 
-// Initialize the OLED display using SPI
-// D5 -> CLK
-// D7 -> MOSI (DOUT)
-// D0 -> RES
-// D2 -> DC
-// D8 -> CS
-// SSD1306Spi        display(D0, D2, D8);
-// or
-// SH1106Spi         display(D0, D2);
-
-// Initialize the OLED display using brzo_i2c
-// D3 -> SDA
-// D5 -> SCL
-// SSD1306Brzo display(0x3c, D3, D5);
-// or
-// SH1106Brzo  display(0x3c, D3, D5);
-
-// Initialize the OLED display using Wire library
 SSD1306  display(0x3c, D2, D1);
-// SH1106 display(0x3c, D3, D5);
-
 OLEDDisplayUi ui     ( &display );
+Scheduler scheduler;
+ESP8266WebServer server ( 80 );
 
+const char* ssid = "ASUS";
+const char* password = "12234567";
+const int redBtn = D5;
+const int greenBtn = D8;
+const int leftBtn = D7;
+const int rightBtn = D6;
+
+const char* lightState[] = {lightOff, lightOff, lightOff};
+
+String twoDigits(int digits){
+  if(digits < 10) {
+    String i = '0'+String(digits);
+    return i;
+  }
+  else {
+    return String(digits);
+  }
+}
+
+void testcallback(){
+  delay(1000);
+}
+
+void updateLoadingState(String stage, uint8_t progress){
+   display.clear();
+   display.setTextAlignment(TEXT_ALIGN_CENTER);
+   display.setFont(ArialMT_Plain_10);
+   display.drawString(64, 18, stage);
+   display.drawProgressBar(4, 32, 120, 8, progress);
+   display.display();
+}
+//-------------------------------Frames and Overlays-------------------------------
 void msOverlay(OLEDDisplay *display, OLEDDisplayUiState* state) {
+  String timenow = String(hour())+":"+twoDigits(minute())+":"+twoDigits(second());
   display->setTextAlignment(TEXT_ALIGN_RIGHT);
   display->setFont(ArialMT_Plain_10);
-  display->drawString(128, 0, String(millis()));
+  display->drawString(128, 0, timenow);
 }
 
-void drawFrame1(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  // draw an xbm image.
-  // Please note that everything that should be transitioned
-  // needs to be drawn relative to x and y
+void homeFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
 
-  display->drawXbm(x + 34, y + 14, WiFi_Logo_width, WiFi_Logo_height, WiFi_Logo_bits);
-}
-
-void drawFrame2(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  // Demonstrates the 3 included default sizes. The fonts come from SSD1306Fonts.h file
-  // Besides the default fonts there will be a program to convert TrueType fonts into this format
-  display->setTextAlignment(TEXT_ALIGN_LEFT);
-  display->setFont(ArialMT_Plain_10);
-  display->drawString(0 + x, 10 + y, "Arial 10");
-
-  display->setFont(ArialMT_Plain_16);
-  display->drawString(0 + x, 20 + y, "Arial 16");
-
-  display->setFont(ArialMT_Plain_24);
-  display->drawString(0 + x, 34 + y, "Arial 24");
-}
-
-void drawFrame3(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  // Text alignment demo
-  display->setFont(ArialMT_Plain_10);
-
-  // The coordinates define the left starting point of the text
-  display->setTextAlignment(TEXT_ALIGN_LEFT);
-  display->drawString(0 + x, 11 + y, "Left aligned (0,10)");
-
-  // The coordinates define the center of the text
   display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->drawString(64 + x, 22 + y, "Center aligned (64,22)");
-
-  // The coordinates define the right end of the text
-  display->setTextAlignment(TEXT_ALIGN_RIGHT);
-  display->drawString(128 + x, 33 + y, "Right aligned (128,33)");
-}
-
-void drawFrame4(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  // Demo for drawStringMaxWidth:
-  // with the third parameter you can define the width after which words will be wrapped.
-  // Currently only spaces and "-" are allowed for wrapping
-  display->setTextAlignment(TEXT_ALIGN_LEFT);
   display->setFont(ArialMT_Plain_10);
-  display->drawStringMaxWidth(0 + x, 10 + y, 128, "Lorem ipsum\n dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore.");
+  display->drawString(64 + x, 17 + y, "IP");
+  display->drawString(64 + x, 28 + y, WiFi.localIP().toString());
 }
 
-void drawFrame5(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+void lightFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
 
+  display->drawXbm(x + 48, y + 20, icon_res, icon_res, lightOn);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(64 + x, 50 + y, "Light Control");
 }
 
-// This array keeps function pointers to all frames
-// frames are the single views that slide in
-FrameCallback frames[] = { drawFrame1, drawFrame2, drawFrame3, drawFrame4, drawFrame5 };
+void acFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
 
-// how many frames are there?
-int frameCount = 5;
+  display->drawXbm(x + 48, y + 20, icon_res, icon_res, ac);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(64 + x, 50 + y, "AC Control");
+}
 
-// Overlays are statically drawn on top of a frame eg. a clock
+void lightMenu1(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  display->drawXbm(x + 48, y + 20, icon_res, icon_res, lightState[0]);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(64 + x, 50 + y, "Light 1");
+}
+
+void lightMenu2(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  display->drawXbm(x + 48, y + 20, icon_res, icon_res, lightState[1]);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(64 + x, 50 + y, "Light 2");
+}
+
+void lightMenu3(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  display->drawXbm(x + 48, y + 20, icon_res, icon_res, lightState[2]);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(64 + x, 50 + y, "Light 3");
+}
+
+void acMenu1(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+
+  display->drawXbm(x + 48, y + 20, icon_res, icon_res, ac);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(64 + x, 50 + y, "AC 1");
+}
+
+void acMenu2(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+
+  display->drawXbm(x + 48, y + 20, icon_res, icon_res, ac);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(64 + x, 50 + y, "AC 2");
+}
+
+void acMenu3(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+
+  display->drawXbm(x + 48, y + 20, icon_res, icon_res, ac);
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(64 + x, 50 + y, "AC 3");
+}
+FrameCallback frames[] = { homeFrame, lightFrame, acFrame};
+FrameCallback lightframes[] = { lightMenu1, lightMenu2, lightMenu3};
+FrameCallback acframes[] = { acMenu1, acMenu2, acMenu3};
+int frameCount = 3;
+int lightCount = 3;
+int acCount = 3;
 OverlayCallback overlays[] = { msOverlay };
 int overlaysCount = 1;
 
+int menuState = 0;
+int currentFrame = 0;
+int maxFrame = frameCount;
+void nextMenu(){
+  currentFrame++;
+  if(currentFrame == maxFrame) currentFrame = 0;
+  ui.transitionToFrame(currentFrame);
+}
+void previousMenu(){
+  currentFrame--;
+  if(currentFrame == -1) currentFrame = maxFrame-1;
+  ui.transitionToFrame(currentFrame);
+}
+void selectMenu(){
+  if(menuState == 0){
+    if(currentFrame == 1){ ui.setFrames(lightframes, lightCount); menuState = 1;}
+    else if(currentFrame == 2){ ui.setFrames(acframes, acCount); menuState = 2;}
+    currentFrame = 0;
+  }
+  else if(menuState == 1){
+    if(lightState[currentFrame] == lightOff) lightState[currentFrame] = lightOn;
+    else if(lightState[currentFrame] == lightOn) lightState[currentFrame] = lightOff;
+  }
+}
+
+//----------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-  Serial.println();
-  Serial.println();
 
-	// The ESP is capable of rendering 60fps in 80Mhz mode
-	// but that won't give you much time for anything else
-	// run it in 160Mhz mode or just set it to 30 fps
   ui.setTargetFPS(60);
-
-	// Customize the active and inactive symbol
+  
   ui.setActiveSymbol(activeSymbol);
   ui.setInactiveSymbol(inactiveSymbol);
-
-  // You can change this to
-  // TOP, LEFT, BOTTOM, RIGHT
-  ui.setIndicatorPosition(BOTTOM);
-
-  // Defines where the first frame is located in the bar.
+  
+  ui.setIndicatorPosition(TOP);
   ui.setIndicatorDirection(LEFT_RIGHT);
 
-  // You can change the transition that is used
-  // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
   ui.setFrameAnimation(SLIDE_LEFT);
 
-  // Add frames
   ui.setFrames(frames, frameCount);
-
-  // Add overlays
   ui.setOverlays(overlays, overlaysCount);
 
-  // Initialising the UI will init the display too.
+  ui.disableAutoTransition();
+  ui.setTimePerTransition(100);
+
   ui.init();
 
   display.flipScreenVertically();
+  
+  display.clear();
+  display.drawXbm(41, 18, Logo_width, Logo_height, Logo_bits);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(64, 0, "Ai2 Prototype");
+  display.display();
+  delay(2000);
+  
+  updateLoadingState("initializing...", 0);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    WiFi.begin(ssid, password);
+    delay(500);
+  }
+  Serial.println(WiFi.localIP());
+  updateLoadingState("WiFi Connected...", 15);
+  delay(100);
+  if ( MDNS.begin ( "esp8266" ) ) {
+    updateLoadingState("MDNS started...", 30);
+    delay(100);
+  }
+  server.on ( "/", []() {
+   server.send ( 200, "text/plain", "this works as well" );
+  } );
+  server.begin();
+  updateLoadingState("HTTP Initialized...", 50);
+  delay(100);
+  //pins setup
+  pinMode(redBtn, INPUT);
+  pinMode(greenBtn, INPUT);
+  pinMode(leftBtn, INPUT);
+  pinMode(rightBtn, INPUT);
+  updateLoadingState("Pins Initialized...", 75);
+  delay(100);
+  //Time
+  unsigned long secsSinceStart = millis();
+  // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
+  const unsigned long seventyYears = 2208988800UL;
+  // subtract seventy years:
+  unsigned long epoch = secsSinceStart - seventyYears * SECS_PER_HOUR;
+  setTime(epoch);
+  updateLoadingState("Time Initialized...", 100);
 
 }
-
-
+//debounce and one-pulse
+int redVal, greenVal, leftVal, rightVal;
+int lRed, lGreen, lLeft, lRight;
+int sRed, sGreen, sLeft, sRight;
 void loop() {
+  server.handleClient();
   int remainingTimeBudget = ui.update();
-
-  if (remainingTimeBudget > 0) {
-    // You can do some work here
-    // Don't do stuff if you are below your
-    // time budget.
+  
+  if (remainingTimeBudget > 0) { 
+    
+    redVal = digitalRead(redBtn);
+    greenVal = digitalRead(greenBtn);
+    leftVal = digitalRead(leftBtn);
+    rightVal = digitalRead(rightBtn);
+    
+    if(((millis()-lLeft) > debounce) && sLeft && leftVal){
+      previousMenu();
+      lLeft = millis();
+      sLeft = 0;
+    }else{
+      sLeft = !leftVal;
+    }
+    if(((millis()-lRight) > debounce) && sRight && rightVal){
+      nextMenu();
+      lRight = millis();
+      sRight = 0;
+    }else{
+      sRight = !rightVal;
+    }
+    if(((millis()-lGreen) > debounce) && sGreen && greenVal){
+      selectMenu();
+      lGreen = millis();
+      sGreen = 0;
+    }else{
+      sGreen = !greenVal;
+    }
+    if(((millis()-lRed) > debounce) && sRed && redVal){
+      ui.setFrames(frames, frameCount);
+      menuState = 0;
+      lRed = millis();
+      sRed = 0;
+    }else{
+      sRed = !redVal;
+    }
+    
+    remainingTimeBudget = ui.update();
     delay(remainingTimeBudget);
   }
 }
+
