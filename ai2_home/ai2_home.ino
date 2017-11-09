@@ -166,6 +166,7 @@ int overlaysCount = 1;
 
 int menuState = 0;
 int currentFrame = 0;
+int tempFrame = 0;
 int maxFrame = frameCount;
 void nextMenu(){
   currentFrame++;
@@ -181,12 +182,18 @@ void selectMenu(){
   if(menuState == 0){
     if(currentFrame == 1){ ui.setFrames(lightframes, lightCount); menuState = 1;}
     else if(currentFrame == 2){ ui.setFrames(acframes, acCount); menuState = 2;}
+    tempFrame = currentFrame;
     currentFrame = 0;
   }
   else if(menuState == 1){
     if(lightState[currentFrame] == lightOff) lightState[currentFrame] = lightOn;
     else if(lightState[currentFrame] == lightOn) lightState[currentFrame] = lightOff;
   }
+}
+void exitMenu(){
+  ui.setFrames(frames, frameCount);
+  if(menuState != 0) currentFrame = tempFrame;
+  menuState = 0;
 }
 
 //----------------------------------------------------------------------------
@@ -294,8 +301,7 @@ void loop() {
       sGreen = !greenVal;
     }
     if(((millis()-lRed) > debounce) && sRed && redVal){
-      ui.setFrames(frames, frameCount);
-      menuState = 0;
+      exitMenu();
       lRed = millis();
       sRed = 0;
     }else{
