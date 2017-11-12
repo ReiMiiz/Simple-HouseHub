@@ -32,6 +32,7 @@
 #include <ESP8266WiFi.h>
 #include <TaskScheduler.h>
 #include <ESP8266WebServer.h>
+#include <WebSocketsServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiClient.h>
 
@@ -91,8 +92,10 @@ void homeFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16
 
   display->setTextAlignment(TEXT_ALIGN_CENTER);
   display->setFont(ArialMT_Plain_10);
-  display->drawString(64 + x, 17 + y, "IP");
+  display->drawString(64 + x, 17 + y, "Info");
   display->drawString(64 + x, 28 + y, WiFi.localIP().toString());
+  display->drawString(64 + x, 39 + y, WiFi.macAddress());
+
 }
 
 void lightFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
@@ -193,6 +196,7 @@ void selectMenu(){
 void exitMenu(){
   ui.setFrames(frames, frameCount);
   if(menuState != 0) currentFrame = tempFrame;
+  ui.switchToFrame(currentFrame);
   menuState = 0;
 }
 
@@ -227,33 +231,32 @@ void setup() {
   display.drawString(64, 0, "Ai2 Prototype");
   display.display();
   delay(2000);
-  
-  updateLoadingState("initializing...", 0);
+  updateLoadingState("Initializing...", 0);
+  delay(100);
+  updateLoadingState("Connecting WiFi...", 10);
   while (WiFi.status() != WL_CONNECTED)
   {
     WiFi.begin(ssid, password);
     delay(500);
   }
   Serial.println(WiFi.localIP());
-  updateLoadingState("WiFi Connected...", 15);
+  updateLoadingState("Starting MDNS...", 20);
   delay(100);
   if ( MDNS.begin ( "esp8266" ) ) {
-    updateLoadingState("MDNS started...", 30);
     delay(100);
   }
+  updateLoadingState("Initializing Server...", 30);
   server.on ( "/", []() {
    server.send ( 200, "text/plain", "this works as well" );
   } );
   server.begin();
-  updateLoadingState("HTTP Initialized...", 50);
-  delay(100);
+  updateLoadingState("Pins Initialized...", 65);
   //pins setup
   pinMode(redBtn, INPUT);
   pinMode(greenBtn, INPUT);
   pinMode(leftBtn, INPUT);
   pinMode(rightBtn, INPUT);
-  updateLoadingState("Pins Initialized...", 75);
-  delay(100);
+  updateLoadingState("Time Initialized...", 85);
   //Time
   unsigned long secsSinceStart = millis();
   // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
@@ -261,8 +264,8 @@ void setup() {
   // subtract seventy years:
   unsigned long epoch = secsSinceStart - seventyYears * SECS_PER_HOUR;
   setTime(epoch);
-  updateLoadingState("Time Initialized...", 100);
-
+  updateLoadingState("Finished...", 100);
+  delay(500);
 }
 //debounce and one-pulse
 int redVal, greenVal, leftVal, rightVal;
