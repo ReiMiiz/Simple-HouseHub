@@ -158,7 +158,7 @@ void acMenu3(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t
   display->setFont(ArialMT_Plain_10);
   display->drawString(64 + x, 50 + y, "AC 3");
 }
-FrameCallback frames[] = { homeFrame, lightFrame, acFrame};
+FrameCallback frames[] = { lightFrame, acFrame, homeFrame};
 FrameCallback lightframes[] = { lightMenu1, lightMenu2, lightMenu3};
 FrameCallback acframes[] = { acMenu1, acMenu2, acMenu3};
 int frameCount = 3;
@@ -168,9 +168,9 @@ OverlayCallback overlays[] = { msOverlay };
 int overlaysCount = 1;
 
 int menuState = 0;
-int currentFrame = 0;
 int tempFrame = 0;
 int maxFrame = frameCount;
+/*
 void nextMenu(){
   currentFrame++;
   if(currentFrame == maxFrame) currentFrame = 0;
@@ -180,23 +180,21 @@ void previousMenu(){
   currentFrame--;
   if(currentFrame == -1) currentFrame = maxFrame-1;
   ui.transitionToFrame(currentFrame);
-}
+}*/
 void selectMenu(){
   if(menuState == 0){
-    if(currentFrame == 1){ ui.setFrames(lightframes, lightCount); menuState = 1;}
-    else if(currentFrame == 2){ ui.setFrames(acframes, acCount); menuState = 2;}
-    tempFrame = currentFrame;
-    currentFrame = 0;
+    tempFrame =  ui.getUiState()->currentFrame;
+    if(ui.getUiState()->currentFrame == 0){ ui.setFrames(lightframes, lightCount); menuState = 1;}
+    else if(ui.getUiState()->currentFrame == 1){ ui.setFrames(acframes, acCount); menuState = 2;}
   }
   else if(menuState == 1){
-    if(lightState[currentFrame] == lightOff) lightState[currentFrame] = lightOn;
-    else if(lightState[currentFrame] == lightOn) lightState[currentFrame] = lightOff;
+    if(lightState[ui.getUiState()->currentFrame] == lightOff) lightState[ui.getUiState()->currentFrame] = lightOn;
+    else if(lightState[ui.getUiState()->currentFrame] == lightOn) lightState[ui.getUiState()->currentFrame] = lightOff;
   }
 }
 void exitMenu(){
   ui.setFrames(frames, frameCount);
-  if(menuState != 0) currentFrame = tempFrame;
-  ui.switchToFrame(currentFrame);
+  if(menuState != 0) ui.switchToFrame(tempFrame);  
   menuState = 0;
 }
 
@@ -283,14 +281,14 @@ void loop() {
     rightVal = digitalRead(rightBtn);
     
     if(((millis()-lLeft) > debounce) && sLeft && leftVal){
-      previousMenu();
+      ui.previousFrame();
       lLeft = millis();
       sLeft = 0;
     }else{
       sLeft = !leftVal;
     }
     if(((millis()-lRight) > debounce) && sRight && rightVal){
-      nextMenu();
+      ui.nextFrame();
       lRight = millis();
       sRight = 0;
     }else{
